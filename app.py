@@ -6,6 +6,16 @@ import re
 from datetime import datetime
 from typing import List, Dict, Tuple, Optional
 
+# Auto-install Playwright browsers on startup if running on Streamlit Cloud
+try:
+    import subprocess
+    playwright_cache = os.path.expanduser("~/.cache/ms-playwright")
+    if not os.path.exists(playwright_cache) or len(os.listdir(playwright_cache)) == 0:
+        with st.spinner("🔧 Installing Playwright Chromium browser for first-time use..."):
+            subprocess.run(["playwright", "install", "chromium"], check=True)
+except Exception:
+    pass
+
 # Import modular investment engine components
 from utils.real_estate.models import PropertyListing, FinancialInputs, PropertyEvaluation
 from utils.real_estate.calculator import (
