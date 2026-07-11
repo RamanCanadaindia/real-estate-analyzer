@@ -667,11 +667,19 @@ with tab_gmail:
                     status_2, data_2 = mail.search(None, 'FROM "paragonrels.com"')
                     if status_2 == "OK" and data_2[0]:
                         alert_emails.extend([(msg_id, "Paragon") for msg_id in data_2[0].split()])
+
+                    status_3, data_3 = mail.search(None, 'FROM "paragonmessaging.com"')
+                    if status_3 == "OK" and data_3[0]:
+                        alert_emails.extend([(msg_id, "Paragon Mail") for msg_id in data_3[0].split()])
                         
                     # Backup check for subjects
-                    status_3, data_3 = mail.search(None, 'SUBJECT "MLS"')
-                    if status_3 == "OK" and data_3[0]:
-                        alert_emails.extend([(msg_id, "MLS Alert") for msg_id in data_3[0].split()])
+                    status_4, data_4 = mail.search(None, 'SUBJECT "MLS"')
+                    if status_4 == "OK" and data_4[0]:
+                        alert_emails.extend([(msg_id, "MLS Alert") for msg_id in data_4[0].split()])
+
+                    status_5, data_5 = mail.search(None, 'SUBJECT "Real Estate Listing"')
+                    if status_5 == "OK" and data_5[0]:
+                        alert_emails.extend([(msg_id, "Listing Notification") for msg_id in data_5[0].split()])
 
                 if not alert_emails:
                     st.warning("No recent real estate alert emails found.")
