@@ -65,8 +65,11 @@ def clean_numeric_price(price_str) -> float:
 st.title("💼 Real Estate Investment Decision Engine")
 st.write("Professional residential asset valuation dashboard for Metro Vancouver development and cash flow analysis.")
 
-# Setup layout columns
-col_left, col_right = st.columns([4, 8])
+# Tabs
+tab_analyzer, tab_gmail = st.tabs(["📊 Investment Analyzer", "✉️ Gmail Listing Scanner"])
+
+with tab_analyzer:
+    col_left, col_right = st.columns([4, 8])
 
 with col_left:
     st.subheader("⚙️ Analysis Parameters")
@@ -576,3 +579,356 @@ with col_right:
                             
                             sync_df = pd.DataFrame(rows_data)
                             sheets_helper.sync_property_listings(spreadsheet, sync_df)
+
+
+with tab_gmail:
+    st.subheader("✉️ Scan Gmail for Realtor.ca & Paragon MLS Alerts")
+    st.markdown("This scanner logs into your Gmail, extracts property listings from recent realtor emails, runs investment and cash flow analyses, and posts them directly to Google Sheets!")
+
+    import imaplib
+    import email
+    from email.header import decode_header
+    import json
+    from utils.gemini_helper import query_gemini
+
+    # Gmail Credentials Persistence
+    gmail_config_path = "gmail_config.json"
+    def load_gmail_config():
+        if os.path.exists(gmail_config_path):
+            try:
+                with open(gmail_config_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except:
+                pass
+        return {"gmail_user": "", "gmail_password": "", "sheet_url": ""}
+
+    def save_gmail_config(data):
+        try:
+            with open(gmail_config_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4)
+        except Exception as e:
+            st.error(f"Failed to save Gmail credentials: {e}")
+
+    gmail_saved = load_gmail_config()
+
+    col_g1, col_g2 = st.columns(2)
+    with col_g1:
+        gmail_user = st.text_input("Gmail Address", value=st.session_state.get("GMAIL_USER", gmail_saved.get("gmail_user", "")), placeholder="yourname@gmail.com")
+        gmail_password = st.text_input("Gmail App Password", type="password", value=st.session_state.get("GMAIL_PASSWORD", gmail_saved.get("gmail_password", "")), help="Create an App Password in your Google Account Security settings.")
+    with col_g2:
+        sheet_url = st.text_input("Google Spreadsheet URL or ID", value=st.session_state.get("google_spreadsheet_id", gmail_saved.get("sheet_url", st.secrets.get("google_spreadsheet_id", ""))), placeholder="Paste sheet link here")
+        scan_limit = st.slider("Scan Limit (Recent Emails)", min_value=5, max_value=50, value=15)
+
+    if gmail_user:
+        st.session_state["GMAIL_USER"] = gmail_user
+    if gmail_password:
+        st.session_state["GMAIL_PASSWORD"] = gmail_password
+    if sheet_url:
+        st.session_state["google_spreadsheet_id"] = sheet_url
+
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        gmail_btn = st.button("🚀 Scan Gmail & Sync Listings", type="primary", use_container_width=True)
+    with col_btn2:
+        save_gmail_btn = st.button("💾 Save Credentials locally", use_container_width=True)
+
+    if save_gmail_btn:
+        gmail_data = {
+            "gmail_user": gmail_user,
+            "gmail_password": gmail_password,
+            "sheet_url": sheet_url
+        }
+        save_gmail_config(gmail_data)
+        st.success("Credentials saved successfully!")
+
+    if gmail_btn:
+        if not gmail_user or not gmail_password:
+            st.error("🔑 Please enter your Gmail Address and App Password!")
+        elif not sheet_url:
+            st.error("📊 Please specify your Google Sheet URL or ID!")
+        else:
+            with st.spinner("📧 Connecting to Gmail IMAP server..."):
+                try:
+                    mail = imaplib.IMAP4_SSL("imap.gmail.com", 993)
+                    mail.login(gmail_user, gmail_password)
+                    mail.select("inbox")
+                except Exception as e:
+                    st.error(f"❌ Failed to connect to Gmail: {e}. Check if IMAP is enabled.")
+                    mail = None
+
+            if mail:
+                alert_emails = []
+                with st.spinner("🔍 Searching for listing alert emails..."):
+                    # Search Realtor.ca and Paragon
+                    status_1, data_1 = mail.search(None, 'FROM "realtor.ca"')
+                    if status_1 == "OK" and data_1[0]:
+                        alert_emails.extend([(msg_id, "Realtor.ca") for msg_id in data_1[0].split()])
+                    
+                    status_2, data_2 = mail.search(None, 'FROM "paragonrels.com"')
+                    if status_2 == "OK" and data_2[0]:
+                        alert_emails.extend([(msg_id, "Paragon") for msg_id in data_2[0].split()])
+                        
+                    # Backup check for subjects
+                    status_3, data_3 = mail.search(None, 'SUBJECT "MLS"')
+                    if status_3 == "OK" and data_3[0]:
+                        alert_emails.extend([(msg_id, "MLS Alert") for msg_id in data_3[0].split()])
+
+                if not alert_emails:
+                    st.warning("No recent real estate alert emails found.")
+                    mail.logout()
+                else:
+                    # Sort by message ID descending (most recent first) and unique values
+                    seen_ids = set()
+                    unique_alerts = []
+                    for item in sorted(alert_emails, key=lambda x: int(x[0]), reverse=True):
+                        if item[0] not in seen_ids:
+                            seen_ids.add(item[0])
+                            unique_alerts.append(item)
+                            
+                    unique_alerts = unique_alerts[:scan_limit]
+                    st.info(f"Found {len(unique_alerts)} recent property alert emails to check!")
+                    
+                    progress_gmail = st.progress(0)
+                    all_listings_found = []
+                    
+                    for idx, (msg_id, source) in enumerate(unique_alerts):
+                        res, msg_data = mail.fetch(msg_id, "(RFC822)")
+                        if res != "OK":
+                            continue
+                        
+                        raw_email = msg_data[0][1]
+                        msg = email.message_from_bytes(raw_email)
+                        
+                        # Extract subject
+                        subject, encoding = decode_header(msg["Subject"])[0]
+                        if isinstance(subject, bytes):
+                            subject = subject.decode(encoding or "utf-8", errors="ignore")
+                            
+                        # Extract body
+                        body = ""
+                        if msg.is_multipart():
+                            for part in msg.walk():
+                                content_type = part.get_content_type()
+                                content_disposition = str(part.get("Content-Disposition"))
+                                if content_type == "text/plain" and "attachment" not in content_disposition:
+                                    try:
+                                        body += part.get_payload(decode=True).decode("utf-8", errors="ignore")
+                                    except:
+                                        pass
+                                elif content_type == "text/html" and "attachment" not in content_disposition:
+                                    try:
+                                        html_content = part.get_payload(decode=True).decode("utf-8", errors="ignore")
+                                        clean_text = re.sub("<[^<]+?>", "", html_content)
+                                        body += clean_text
+                                    except:
+                                        pass
+                        else:
+                            try:
+                                body = msg.get_payload(decode=True).decode("utf-8", errors="ignore")
+                            except:
+                                pass
+                                
+                        # Extract Paragon links
+                        paragon_links = re.findall(r'https://[a-z0-9\.]*paragonrels\.com/[^\s"\'<>]+', body)
+                        
+                        if paragon_links:
+                            for link in paragon_links[:3]: # Limit to max 3 links per email
+                                all_listings_found.append({
+                                    "Link": link,
+                                    "Source": "Scraper"
+                                })
+                        else:
+                            # Use Gemini to parse text listing from email content
+                            body_cleaned = " ".join(body.split())[:10000]
+                            prompt = f"""
+                            Extract any real estate properties mentioned for sale in the following text.
+                            
+                            Email Content:
+                            {body_cleaned}
+                            
+                            Output details strictly in JSON format (list of listings):
+                            [
+                              {{
+                                "Address": "Address string",
+                                "Price": "$1,200,000",
+                                "Bedrooms": 3,
+                                "Bathrooms": 2,
+                                "Sqft": 1500,
+                                "Strata Fee": 400.0,
+                                "Property Tax": 3200.0,
+                                "Year Built": 2015,
+                                "Property Type": "Townhouse",
+                                "MLS Number": "MLS# string",
+                                "Link": "URL link if any"
+                              }}
+                            ]
+                            Only output valid JSON. If no properties found, output [].
+                            """
+                            try:
+                                gemini_res = query_gemini(prompt, response_json=True)
+                                parsed_list = json.loads(gemini_res.strip())
+                                if isinstance(parsed_list, list) and parsed_list:
+                                    for item in parsed_list:
+                                        item["Source"] = "Gemini"
+                                        all_listings_found.append(item)
+                            except Exception:
+                                pass
+                                
+                        progress_gmail.progress(int((idx + 1) / len(unique_alerts) * 100))
+                    
+                    mail.logout()
+                    
+                    if not all_listings_found:
+                        st.warning("No listings found inside the scanned emails.")
+                    else:
+                        st.success(f"Discovered {len(all_listings_found)} property links/listings! Scraping & evaluating investments...")
+                        
+                        progress_eval = st.progress(0)
+                        evaluated_rows = []
+                        
+                        for idx, p in enumerate(all_listings_found):
+                            # If it needs scraping via playwright
+                            if p.get("Source") == "Scraper":
+                                listing_url = p.get("Link")
+                                try:
+                                    import sys
+                                    is_headless_env = (sys.platform.startswith("linux") and not os.environ.get("DISPLAY"))
+                                    with RealEstateScraperTask({"url": listing_url}, headless=is_headless_env) as scraper_task:
+                                        scraper_res = scraper_task.execute()
+                                    if scraper_res:
+                                        p_data = scraper_res[0]
+                                    else:
+                                        continue
+                                except Exception as e:
+                                    continue
+                            else:
+                                p_data = p
+                                
+                            price_val = clean_numeric_price(p_data.get("Price", 0.0))
+                            if price_val == 0.0:
+                                continue
+                                
+                            # Execute calculations
+                            try:
+                                default_rent = float(p_data.get("Est Rent", 2200))
+                                listing_model = PropertyListing(
+                                    address=p_data.get("Address", "Unknown Address"),
+                                    price=price_val,
+                                    beds=int(p_data.get("Bedrooms", 1)),
+                                    baths=int(p_data.get("Bathrooms", 1)),
+                                    sqft=int(p_data.get("Sqft", 800)),
+                                    strata_fee=float(p_data.get("Strata Fee", 0.0)),
+                                    property_tax=float(p_data.get("Property Tax", 0.0)),
+                                    year_built=int(p_data.get("Year Built", 2000)),
+                                    property_type=p_data.get("Property Type", "Condo"),
+                                    mls_number=p_data.get("MLS Number", "N/A"),
+                                    link=p_data.get("Link", ""),
+                                    timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                )
+                                
+                                financials_model = FinancialInputs(
+                                    down_payment_pct=down_payment_pct,
+                                    interest_rate=interest_rate,
+                                    amortization_years=amortization_years,
+                                    mortgage_type=mortgage_type,
+                                    payment_frequency=frequency,
+                                    insurance_monthly=insurance_monthly,
+                                    vacancy_rate_pct=vacancy_rate_pct,
+                                    maintenance_pct=maintenance_pct,
+                                    property_management_pct=prop_management_pct,
+                                    utilities_landlord_paid=utilities_monthly,
+                                    misc_expenses_monthly=misc_monthly,
+                                    est_rent=default_rent
+                                )
+                                
+                                principal_mortgage = price_val * (1 - (down_payment_pct / 100))
+                                mort_res = calculate_mortgage_details(principal_mortgage, interest_rate, amortization_years, frequency, mortgage_type == "Variable")
+                                cf_res = calculate_cash_flow_details(listing_model, financials_model, mort_res.monthly_payment)
+                                app_res = calculate_appreciation_forecast(listing_model)
+                                roi_res = calculate_roi_details(listing_model, financials_model, mort_res, cf_res, app_res)
+                                comp_res = evaluate_comparable_sales(listing_model)
+                                transit_res = evaluate_transit_score(listing_model)
+                                dev_res = evaluate_development_potential(listing_model, transit_res)
+                                school_res = evaluate_schools(listing_model)
+                                demand_res = evaluate_rental_demand(listing_model)
+                                cond_res = evaluate_property_condition(listing_model)
+                                risk_res = evaluate_risk_profile(listing_model, financials_model, cond_res)
+                                
+                                # Scoring
+                                score_app = calculate_norm_score(app_res.expected_annual_appreciation_pct, 3.0, 8.0)
+                                score_cf = calculate_norm_score(cf_res.cash_on_cash_pct, -2.0, 6.0)
+                                score_disc = calculate_norm_score(comp_res.price_discount_pct, -10.0, 15.0)
+                                score_dev = dev_res.development_score
+                                score_trans = transit_res.transit_score
+                                score_dem = demand_res.rental_demand_score
+                                score_sch = school_res.average_school_rating
+                                
+                                from utils.real_estate.data_source import detect_municipality, MUNICIPALITIES_DATA
+                                m_name = detect_municipality(listing_model.address)
+                                score_safe = MUNICIPALITIES_DATA.get(m_name, {}).get("safety_score", 7.0)
+                                score_cond = cond_res.condition_score
+                                score_risk = 10.0 - risk_res.risk_score
+                                
+                                weighted_val = (
+                                    (w_app * score_app) +
+                                    (w_cf * score_cf) +
+                                    (w_disc * score_disc) +
+                                    (w_dev * score_dev) +
+                                    (w_trans * score_trans) +
+                                    (w_dem * score_dem) +
+                                    (w_sch * score_sch) +
+                                    (w_safe * score_safe) +
+                                    (w_cond * score_cond) +
+                                    (w_risk * score_risk)
+                                ) / w_sum
+                                composite_score = round(weighted_val * 10.0, 1)
+                                
+                                evaluated_rows.append({
+                                    "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                    "Address": listing_model.address,
+                                    "Property Type": listing_model.property_type,
+                                    "Year Built": listing_model.year_built,
+                                    "Price": f"${listing_model.price:,.2f}",
+                                    "Bedrooms": listing_model.beds,
+                                    "Bathrooms": listing_model.baths,
+                                    "Sqft": listing_model.sqft,
+                                    "Strata Fee": f"${listing_model.strata_fee:.2f}",
+                                    "Property Tax": f"${listing_model.property_tax:.2f}",
+                                    "Est Rent": f"${cf_res.gross_rent:.2f}",
+                                    "Mortgage": f"${mort_res.monthly_payment:.2f}",
+                                    "Net Cash Flow": f"${cf_res.net_cash_flow_monthly:.2f}",
+                                    "Cap Rate": f"{cf_res.cap_rate}%",
+                                    "Cash-on-Cash Return": f"{cf_res.cash_on_cash_pct}%",
+                                    "5y IRR": f"{roi_res.irr_5y:.1f}%",
+                                    "Transit Score": f"{transit_res.transit_score:.1f}/10",
+                                    "Schools Catchment": f"{school_res.average_school_rating:.1f}/10",
+                                    "Risk Score": f"{risk_res.risk_level}",
+                                    "Composite Rank Score": f"{composite_score}/100",
+                                    "MLS Number": listing_model.mls_number,
+                                    "Link": listing_model.link
+                                })
+                            except Exception as eval_e:
+                                st.warning(f"Failed to evaluate {p_data.get('Address')}: {eval_e}")
+                                
+                            progress_eval.progress(int((idx + 1) / len(all_listings_found) * 100))
+                            
+                        # Post to Google Sheet
+                        if evaluated_rows:
+                            with st.spinner("📊 Posting evaluated listings to Google Sheets..."):
+                                client = sheets_helper.get_gspread_client()
+                                if client:
+                                    spreadsheet = sheets_helper.get_spreadsheet(client, sheet_url)
+                                    if spreadsheet:
+                                        sync_df = pd.DataFrame(evaluated_rows)
+                                        sheets_helper.sync_property_listings(spreadsheet, sync_df)
+                                        
+                            st.subheader("📋 Parsed Listing Results")
+                            for idx, r in enumerate(evaluated_rows):
+                                st.write(f"**{idx+1}. {r['Address']}** ({r['Property Type']})")
+                                st.write(f"*Price:* {r['Price']} | *Score:* {r['Composite Rank Score']}")
+                                st.write(f"*Cash Flow:* {r['Net Cash Flow']}/mo | *MLS:* {r['MLS Number']}")
+                                if r["Link"]:
+                                    st.write(f"[Open Listing Link]({r['Link']})")
+                                st.write("---")
+                        else:
+                            st.warning("No listings were successfully evaluated.")
