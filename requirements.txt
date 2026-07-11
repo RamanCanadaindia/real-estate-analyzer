@@ -1,0 +1,10 @@
+streamlit
+pandas
+openpyxl
+reportlab
+gspread
+google-auth
+playwright
+google-generativeai
+folium
+streamlit-folium
