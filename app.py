@@ -737,12 +737,15 @@ with tab_gmail:
                                 pass
                                 
                         # Extract Paragon links
-                        paragon_links = re.findall(r'https://[a-z0-9\.]*paragonrels\.com/[^\s"\'<>]+', body)
+                        import html
+                        paragon_links = re.findall(r'https?://[^\s"\'<>]*paragon[^\s"\'<>]+', body)
                         
                         if paragon_links:
                             for link in paragon_links[:3]: # Limit to max 3 links per email
+                                decoded_link = html.unescape(link).strip()
+                                decoded_link = re.sub(r'[\.\,\)\>\s\\]+$', '', decoded_link)
                                 all_listings_found.append({
-                                    "Link": link,
+                                    "Link": decoded_link,
                                     "Source": "Scraper"
                                 })
                         else:
