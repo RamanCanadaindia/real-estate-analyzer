@@ -241,12 +241,20 @@ class RealEstateScraperTask(BaseTask):
         year_match = re.search(r'(?:Approx\.\s*Year\s*Built|Year\s*Built|Yr\s*Built)[\s:|]*(\d{4})', text, re.IGNORECASE)
         year_built = int(year_match.group(1)) if year_match else 2000
         
-        # Property Type
-        prop_type = "Condo"
-        if "townhouse" in text.lower() or "row house" in text.lower():
+        # Property Type Heuristics
+        text_lower = text.lower()
+        if "apartment/condo" in text_lower or "apartment" in text_lower or "condo" in text_lower:
+            prop_type = "Condo"
+        elif "townhouse" in text_lower or "town house" in text_lower or "row house" in text_lower:
             prop_type = "Townhouse"
-        elif "detached" in text.lower() or "single family" in text.lower() or "house" in text.lower():
+        elif "detached" in text_lower or "single family" in text_lower or "house/single family" in text_lower:
             prop_type = "Detached House"
+        else:
+            # If address looks like a unit (e.g. starts with "304 13530..." or "304-13530...")
+            if re.match(r'^\d+[\s\-]\d+', address.strip()):
+                prop_type = "Condo"
+            else:
+                prop_type = "Detached House"
 
         return [{
             "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
