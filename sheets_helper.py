@@ -243,10 +243,25 @@ def sync_property_listings(spreadsheet, df):
         sheet_name = "Real Estate Listings"
         try:
             wks = spreadsheet.worksheet(sheet_name)
-            # Fetch all values to check for duplicates
-            existing_rows = wks.get_all_records()
-            existing_links = {str(row.get("Link", "")).strip() for row in existing_rows}
-            existing_addresses = {str(row.get("Address", "")).strip().lower() for row in existing_rows}
+            # Fetch all values to check for duplicates (avoids error on empty/duplicate headers)
+            all_values = wks.get_all_values()
+            existing_links = set()
+            existing_addresses = set()
+            
+            if all_values:
+                headers = [str(h).strip().lower() for h in all_values[0]]
+                link_col_idx = headers.index("link") if "link" in headers else -1
+                addr_col_idx = headers.index("address") if "address" in headers else -1
+                
+                for row in all_values[1:]:
+                    if link_col_idx != -1 and link_col_idx < len(row):
+                        link_val = str(row[link_col_idx]).strip()
+                        if link_val:
+                            existing_links.add(link_val)
+                    if addr_col_idx != -1 and addr_col_idx < len(row):
+                        addr_val = str(row[addr_col_idx]).strip().lower()
+                        if addr_val:
+                            existing_addresses.add(addr_val)
         except gspread.exceptions.WorksheetNotFound:
             # Create sheet if missing
             wks = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols=str(len(df.columns)))
