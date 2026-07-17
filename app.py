@@ -138,9 +138,13 @@ with col_left:
         else:
             with st.spinner("Analyzing text with Gemini..."):
                 try:
-                    from utils.gemini_helper import query_gemini
+                    from utils.gemini_helper import query_gemini, get_gemini_client
                     from datetime import datetime
                     
+                    if get_gemini_client() is None:
+                        st.error("🔑 Gemini API Key is missing! Please configure GEMINI_API_KEY in your Streamlit Secrets or environment variables.")
+                        st.stop()
+                        
                     prompt = f"""
                     You are a real estate research assistant. Parse the property listing details from the user-pasted text below.
                     Text:

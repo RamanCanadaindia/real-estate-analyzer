@@ -4,10 +4,18 @@ import google.generativeai as genai
 
 def get_gemini_client():
     """
-    Checks if GEMINI_API_KEY is available in the environment and returns a model instance.
+    Checks if GEMINI_API_KEY is available in the environment or Streamlit secrets and returns a model instance.
     Returns None if not configured.
     """
     api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        try:
+            import streamlit as st
+            if "GEMINI_API_KEY" in st.secrets:
+                api_key = st.secrets["GEMINI_API_KEY"]
+        except Exception:
+            pass
+            
     if not api_key:
         return None
     try:
