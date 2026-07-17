@@ -646,12 +646,30 @@ with col_right:
             )
             
         with col_exp2:
+            default_sheet_id = ""
             try:
+                # 1. Check exact key matches
                 default_sheet_id = st.secrets.get("google_spreadsheet_id", "")
                 if not default_sheet_id:
                     default_sheet_id = st.secrets.get("google_sheets", {}).get("spreadsheet_id", "")
+                
+                # 2. Smart key auto-search (handles alternative naming like google_sheet_url, sheet_id, etc.)
+                if not default_sheet_id:
+                    for key in st.secrets.keys():
+                        if "sheet" in key.lower() or "spreadsheet" in key.lower():
+                            val = st.secrets[key]
+                            if isinstance(val, str) and (len(val) > 15 or "docs.google.com" in val):
+                                default_sheet_id = val
+                                break
+                            elif isinstance(val, dict):
+                                for subkey in ["id", "url", "spreadsheet_id"]:
+                                    if subkey in val:
+                                        default_sheet_id = val[subkey]
+                                        break
+                                if default_sheet_id:
+                                    break
             except Exception:
-                default_sheet_id = ""
+                pass
                 
             # Fallback to local configuration file
             if not default_sheet_id:
