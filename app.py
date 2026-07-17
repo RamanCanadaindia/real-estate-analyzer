@@ -652,6 +652,19 @@ with col_right:
                     default_sheet_id = st.secrets.get("google_sheets", {}).get("spreadsheet_id", "")
             except Exception:
                 default_sheet_id = ""
+                
+            # Fallback to local configuration file
+            if not default_sheet_id:
+                try:
+                    import json
+                    gmail_config_path = "gmail_config.json"
+                    if os.path.exists(gmail_config_path):
+                        with open(gmail_config_path, "r", encoding="utf-8") as f:
+                            saved_config = json.load(f)
+                            default_sheet_id = saved_config.get("sheet_url", "")
+                except Exception:
+                    pass
+                    
             spreadsheet_input = st.text_input(
                 "Google Sheet Link / URL:",
                 value=default_sheet_id,
@@ -670,6 +683,19 @@ with col_right:
                     if client:
                         spreadsheet = sheets_helper.get_spreadsheet(client, spreadsheet_input)
                         if spreadsheet:
+                            # Save this spreadsheet URL permanently to local configuration
+                            try:
+                                import json
+                                gmail_config_path = "gmail_config.json"
+                                config_data = {"gmail_user": "", "gmail_password": "", "sheet_url": ""}
+                                if os.path.exists(gmail_config_path):
+                                    with open(gmail_config_path, "r", encoding="utf-8") as f:
+                                        config_data = json.load(f)
+                                config_data["sheet_url"] = spreadsheet_input
+                                with open(gmail_config_path, "w", encoding="utf-8") as f:
+                                    json.dump(config_data, f, indent=4)
+                            except Exception:
+                                pass
                             rows_data = []
                             for ev in evaluations:
                                 listing = ev.listing
