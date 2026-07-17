@@ -123,6 +123,7 @@ class RealEstateScraperTask(BaseTask):
             - year_built: Year the property was built (integer, e.g. 2018)
             - property_type: The property type (e.g. "Townhouse", "Condo", "Detached House")
             - mls_number: The MLS number if listed (e.g. R2891321)
+            - lot_area: Total lot area size in square feet as a number (integer or float, e.g. 4032. Set 0 if no lot area is listed or if it is a standard condo with no individual lot size)
 
             Also, estimate the following research parameters based on your geography knowledge of Metro Vancouver (if the address is in British Columbia):
             - skytrain_walk_minutes: Estimated walking time to the nearest Skytrain station in minutes (integer, e.g. 8. If detached house far from station, estimate walking time to transit hub).
@@ -142,6 +143,7 @@ class RealEstateScraperTask(BaseTask):
                 "year_built": 2018,
                 "property_type": "Townhouse",
                 "mls_number": "...",
+                "lot_area": 4032.0,
                 "skytrain_walk_minutes": 8,
                 "skytrain_station": "...",
                 "est_rent": 2500,
@@ -172,6 +174,7 @@ class RealEstateScraperTask(BaseTask):
                         "Year Built": data.get("year_built", 0),
                         "Property Type": data.get("property_type", "Condo"),
                         "MLS Number": data.get("mls_number", "N/A"),
+                        "Lot Area": float(data.get("lot_area", 0.0)),
                         "Transit Walk Min": data.get("skytrain_walk_minutes", 15),
                         "Nearest Station": data.get("skytrain_station", "Unknown Transit"),
                         "Est Rent": data.get("est_rent", 2000),
@@ -241,6 +244,15 @@ class RealEstateScraperTask(BaseTask):
         year_match = re.search(r'(?:Approx\.\s*Year\s*Built|Year\s*Built|Yr\s*Built)[\s:|]*(\d{4})', text, re.IGNORECASE)
         year_built = int(year_match.group(1)) if year_match else 2000
         
+        # Lot Area
+        lot_match = re.search(r'(?:Lot\s*Area\s*\(sq\.ft\.\)|Lot\s*Area)[\s:|]*([\d,]+\.?\d*)', text, re.IGNORECASE)
+        lot_area = 0.0
+        if lot_match:
+            try:
+                lot_area = float(re.sub(r'[^\d.]', '', lot_match.group(1)))
+            except:
+                pass
+        
         # Property Type Heuristics
         text_lower = text.lower()
         if "apartment/condo" in text_lower or "apartment" in text_lower or "condo" in text_lower:
@@ -255,7 +267,7 @@ class RealEstateScraperTask(BaseTask):
                 prop_type = "Condo"
             else:
                 prop_type = "Detached House"
-
+ 
         return [{
             "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "Address": address,
@@ -268,6 +280,7 @@ class RealEstateScraperTask(BaseTask):
             "Year Built": year_built,
             "Property Type": prop_type,
             "MLS Number": mls_num,
+            "Lot Area": lot_area,
             "Transit Walk Min": 10,
             "Nearest Station": "Nearest Station Hub",
             "Est Rent": 2200,

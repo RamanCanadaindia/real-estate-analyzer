@@ -121,6 +121,119 @@ with col_left:
                 except Exception as e:
                     st.error(f"Scraper Error: {e}")
 
+    # Paste Property Description Option
+    st.write("---")
+    st.write("📋 **Or Paste Property Description**")
+    prop_description = st.text_area(
+        "Paste listing text / description here:",
+        placeholder="MLS: R2891321\nPrice: $750,000\nAddress: 123 Main St, Surrey...\nDescription: Beautiful 3 bed 2 bath house...",
+        height=150,
+        help="Paste any property listing text. Gemini will extract relevant details."
+    )
+    parse_text_btn = st.button("🧠 Parse Description with AI", use_container_width=True)
+    
+    if parse_text_btn:
+        if not prop_description.strip():
+            st.error("Please paste some property description text first.")
+        else:
+            with st.spinner("Analyzing text with Gemini..."):
+                try:
+                    from utils.gemini_helper import query_gemini
+                    from datetime import datetime
+                    
+                    prompt = f"""
+                    You are a real estate research assistant. Parse the property listing details from the user-pasted text below.
+                    Text:
+                    {prop_description[:10000]}
+                    
+                    Extract the following parameters:
+                    - address: The full property address (including unit number, street, city, province/postal code if available. If incomplete, guess the city if context is provided, otherwise leave as detailed as possible)
+                    - price: The list price as a number or string (e.g. 750000 or "$750,000")
+                    - beds: Number of bedrooms (integer or float, e.g. 2. Default to 1 if not found)
+                    - baths: Number of bathrooms (integer or float, e.g. 2. Default to 1 if not found)
+                    - sqft: Total square footage (integer, e.g. 850. Default to 800 if not found)
+                    - strata_fee: Monthly maintenance/strata fee as a number (e.g. 350.00. Set 0 if no strata/maintenance fee is present)
+                    - property_tax: Annual property tax as a number (e.g. 2100.00. Set 0 if not listed)
+                    - year_built: Year the property was built (integer, e.g. 2018. Default to 2000 if not found)
+                    - property_type: The property type (e.g. "Townhouse", "Condo", "Detached House")
+                    - mls_number: The MLS number if listed (e.g. R2891321. Default to "N/A" if not found)
+                    - lot_area: Total lot area size in square feet as a number (integer or float, e.g. 4032. Set 0 if no lot area is listed or if it is a standard condo with no individual lot size)
+                    
+                    Also, estimate these parameters based on Metro Vancouver geography (if the address is in British Columbia):
+                    - skytrain_walk_minutes: Estimated walking time to the nearest Skytrain station in minutes (integer, e.g. 8. Default to 15 if unknown).
+                    - skytrain_station: Name of the nearest Skytrain station (e.g. Surrey Central, Metrotown, Lougheed. Default to "Unknown Transit" if unknown).
+                    - est_rent: Estimated monthly market rent for this property type, beds/baths, and city (integer, e.g. 2500. Default to 2200 if unknown)
+                    - growth_score: Estimated long-term capital growth potential score from 1 to 10 (integer, e.g. 8)
+                    
+                    Format your response strictly as a JSON object:
+                    {{
+                        "address": "...",
+                        "price": "...",
+                        "beds": 2,
+                        "baths": 2,
+                        "sqft": 850,
+                        "strata_fee": 350.00,
+                        "property_tax": 2100.00,
+                        "year_built": 2018,
+                        "property_type": "Townhouse",
+                        "mls_number": "...",
+                        "lot_area": 0.0,
+                        "skytrain_walk_minutes": 15,
+                        "skytrain_station": "...",
+                        "est_rent": 2200,
+                        "growth_score": 6
+                    }}
+                    Do not include markdown code blocks or any other explanation. Only return valid JSON.
+                    """
+                    
+                    gemini_response = query_gemini(prompt, response_json=True)
+                    if gemini_response:
+                        cleaned_response = gemini_response.strip()
+                        if cleaned_response.startswith("```json"):
+                            cleaned_response = cleaned_response[7:]
+                        if cleaned_response.endswith("```"):
+                            cleaned_response = cleaned_response[:-3]
+                            
+                        data = json.loads(cleaned_response.strip())
+                        
+                        item = {
+                            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "Address": data.get("address", "Pasted Property Listing"),
+                            "Price": data.get("price", "0"),
+                            "Bedrooms": data.get("beds", 1),
+                            "Bathrooms": data.get("baths", 1),
+                            "Sqft": data.get("sqft", 800),
+                            "Strata Fee": data.get("strata_fee", 0.0),
+                            "Property Tax": data.get("property_tax", 0.0),
+                            "Year Built": data.get("year_built", 2000),
+                            "Property Type": data.get("property_type", "Condo"),
+                            "MLS Number": data.get("mls_number", "N/A"),
+                            "Lot Area": float(data.get("lot_area", 0.0)),
+                            "Transit Walk Min": data.get("skytrain_walk_minutes", 15),
+                            "Nearest Station": data.get("skytrain_station", "Unknown Transit"),
+                            "Est Rent": data.get("est_rent", 2200),
+                            "Growth Score": data.get("growth_score", 6),
+                            "Link": ""
+                        }
+                        
+                        # De-duplicate check
+                        exists = False
+                        for p in st.session_state.scraped_properties:
+                            if p["Address"] == item["Address"] or (p["MLS Number"] != "N/A" and p["MLS Number"] == item["MLS Number"]):
+                                exists = True
+                                break
+                                
+                        if not exists:
+                            st.session_state.scraped_properties.append(item)
+                            st.success(f"Added listing from text: {item['Address']}")
+                            st.rerun()
+                        else:
+                            st.info("Listing with this address or MLS already analyzed in this session.")
+                    else:
+                        st.error("Failed to parse details. Please make sure the description contains a price/address.")
+                except Exception as e:
+                    st.error(f"Error parsing text with AI: {e}")
+
     # Granular Financial Assumptions
     with st.expander("💸 Detailed Financial Assumptions", expanded=True):
         down_payment_pct = st.number_input("Down Payment %", min_value=5.0, max_value=100.0, value=20.0, step=5.0)
@@ -185,6 +298,7 @@ if st.session_state.scraped_properties:
             property_tax=float(p.get("Property Tax", 0.0)),
             year_built=int(p.get("Year Built", 2000)),
             property_type=p.get("Property Type", "Condo"),
+            lot_area=float(p.get("Lot Area", 0.0)),
             mls_number=p.get("MLS Number", "N/A"),
             link=p.get("Link", ""),
             timestamp=p.get("Timestamp", "")
@@ -552,11 +666,22 @@ with col_right:
                                 transit = ev.transit
                                 risk = ev.risk
                                 
+                                # Calculate the new custom metrics requested by the user
+                                house_age = datetime.now().year - listing.year_built
+                                price_per_lot = listing.price / listing.lot_area if listing.lot_area > 0 else 0.0
+                                price_per_total_sqft = listing.price / listing.sqft if listing.sqft > 0 else 0.0
+                                price_per_bed = listing.price / listing.beds if listing.beds > 0 else 0.0
+
                                 rows_data.append({
                                     "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                     "Address": listing.address,
                                     "Property Type": listing.property_type,
                                     "Year Built": listing.year_built,
+                                    "House Age": house_age,
+                                    "Lot Area": listing.lot_area,
+                                    "Price per Lot Area": f"${price_per_lot:,.2f}" if price_per_lot > 0 else "N/A",
+                                    "Price per Sq Size": f"${price_per_total_sqft:,.2f}" if price_per_total_sqft > 0 else "N/A",
+                                    "Price per Bedroom": f"${price_per_bed:,.2f}" if price_per_bed > 0 else "N/A",
                                     "Price": f"${listing.price:,.2f}",
                                     "Bedrooms": listing.beds,
                                     "Bathrooms": listing.baths,
@@ -582,8 +707,8 @@ with col_right:
 
 
 with tab_gmail:
-    st.subheader("✉️ Scan Gmail for Realtor.ca & Paragon MLS Alerts")
-    st.markdown("This scanner logs into your Gmail, extracts property listings from recent realtor emails, runs investment and cash flow analyses, and posts them directly to Google Sheets!")
+    st.subheader("✉️ Scan Email (Gmail / Outlook) for Realtor.ca & Paragon MLS Alerts")
+    st.markdown("This scanner logs into your Email inbox, extracts property listings from recent realtor emails, runs investment and cash flow analyses, and posts them directly to Google Sheets!")
 
     import imaplib
     import email
@@ -591,7 +716,7 @@ with tab_gmail:
     import json
     from utils.gemini_helper import query_gemini
 
-    # Gmail Credentials Persistence
+    # Credentials Persistence
     gmail_config_path = "gmail_config.json"
     def load_gmail_config():
         if os.path.exists(gmail_config_path):
@@ -607,14 +732,14 @@ with tab_gmail:
             with open(gmail_config_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4)
         except Exception as e:
-            st.error(f"Failed to save Gmail credentials: {e}")
+            st.error(f"Failed to save credentials: {e}")
 
     gmail_saved = load_gmail_config()
 
     col_g1, col_g2 = st.columns(2)
     with col_g1:
-        gmail_user = st.text_input("Gmail Address", value=st.session_state.get("GMAIL_USER", gmail_saved.get("gmail_user", "")), placeholder="yourname@gmail.com")
-        gmail_password = st.text_input("Gmail App Password", type="password", value=st.session_state.get("GMAIL_PASSWORD", gmail_saved.get("gmail_password", "")), help="Create an App Password in your Google Account Security settings.")
+        gmail_user = st.text_input("Email Address", value=st.session_state.get("GMAIL_USER", gmail_saved.get("gmail_user", "")), placeholder="username@gmail.com or username@outlook.com")
+        gmail_password = st.text_input("Email App Password", type="password", value=st.session_state.get("GMAIL_PASSWORD", gmail_saved.get("gmail_password", "")), help="Create an App Password in your Google Account or Microsoft Account Security settings.")
     with col_g2:
         sheet_url = st.text_input("Google Spreadsheet URL or ID", value=st.session_state.get("google_spreadsheet_id", gmail_saved.get("sheet_url", st.secrets.get("google_spreadsheet_id", ""))), placeholder="Paste sheet link here")
         scan_limit = st.slider("Scan Limit (Recent Emails)", min_value=5, max_value=50, value=15)
@@ -628,7 +753,7 @@ with tab_gmail:
 
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
-        gmail_btn = st.button("🚀 Scan Gmail & Sync Listings", type="primary", use_container_width=True)
+        gmail_btn = st.button("🚀 Scan Email & Sync Listings", type="primary", use_container_width=True)
     with col_btn2:
         save_gmail_btn = st.button("💾 Save Credentials locally", use_container_width=True)
 
@@ -643,17 +768,28 @@ with tab_gmail:
 
     if gmail_btn:
         if not gmail_user or not gmail_password:
-            st.error("🔑 Please enter your Gmail Address and App Password!")
+            st.error("🔑 Please enter your Email Address and App Password!")
         elif not sheet_url:
             st.error("📊 Please specify your Google Sheet URL or ID!")
         else:
-            with st.spinner("📧 Connecting to Gmail IMAP server..."):
+            # Determine correct IMAP server based on email domain
+            email_domain = gmail_user.strip().lower().split('@')[-1]
+            outlook_domains = ["outlook.com", "hotmail.com", "live.com", "msn.com", "office365.com"]
+            
+            if any(domain in email_domain for domain in outlook_domains):
+                imap_server = "outlook.office365.com"
+                service_name = "Outlook"
+            else:
+                imap_server = "imap.gmail.com"
+                service_name = "Gmail"
+                
+            with st.spinner(f"📧 Connecting to {service_name} IMAP server ({imap_server})..."):
                 try:
-                    mail = imaplib.IMAP4_SSL("imap.gmail.com", 993)
+                    mail = imaplib.IMAP4_SSL(imap_server, 993)
                     mail.login(gmail_user, gmail_password)
                     mail.select("inbox")
                 except Exception as e:
-                    st.error(f"❌ Failed to connect to Gmail: {e}. Check if IMAP is enabled.")
+                    st.error(f"❌ Failed to connect to {service_name}: {e}. Check if IMAP is enabled and your App Password is correct.")
                     mail = None
 
             if mail:
@@ -789,10 +925,40 @@ with tab_gmail:
                     
                     mail.logout()
                     
+                    # De-duplicate the discovered listings based on Link, Address, or MLS Number
+                    unique_listings = []
+                    seen_links = set()
+                    seen_addresses = set()
+                    seen_mls = set()
+                    
+                    for p in all_listings_found:
+                        link = p.get("Link", "").strip()
+                        addr = p.get("Address", "").strip().lower()
+                        mls = p.get("MLS Number", "").strip().lower()
+                        
+                        is_duplicate = False
+                        if link and link in seen_links:
+                            is_duplicate = True
+                        if addr and addr in seen_addresses:
+                            is_duplicate = True
+                        if mls and mls in seen_mls:
+                            is_duplicate = True
+                            
+                        if not is_duplicate:
+                            unique_listings.append(p)
+                            if link:
+                                seen_links.add(link)
+                            if addr:
+                                seen_addresses.add(addr)
+                            if mls:
+                                seen_mls.add(mls)
+                                
+                    all_listings_found = unique_listings
+                    
                     if not all_listings_found:
                         st.warning("No listings found inside the scanned emails.")
                     else:
-                        st.success(f"Discovered {len(all_listings_found)} property links/listings! Scraping & evaluating investments...")
+                        st.success(f"Discovered {len(all_listings_found)} unique property links/listings! Scraping & evaluating investments...")
                         
                         progress_eval = st.progress(0)
                         evaluated_rows = []
@@ -832,6 +998,7 @@ with tab_gmail:
                                     property_tax=float(p_data.get("Property Tax", 0.0)),
                                     year_built=int(p_data.get("Year Built", 2000)),
                                     property_type=p_data.get("Property Type", "Condo"),
+                                    lot_area=float(p_data.get("Lot Area", 0.0)),
                                     mls_number=p_data.get("MLS Number", "N/A"),
                                     link=p_data.get("Link", ""),
                                     timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -894,11 +1061,22 @@ with tab_gmail:
                                 ) / w_sum
                                 composite_score = round(weighted_val * 10.0, 1)
                                 
+                                # Calculate the new custom metrics requested by the user
+                                house_age = datetime.now().year - listing_model.year_built
+                                price_per_lot = listing_model.price / listing_model.lot_area if listing_model.lot_area > 0 else 0.0
+                                price_per_total_sqft = listing_model.price / listing_model.sqft if listing_model.sqft > 0 else 0.0
+                                price_per_bed = listing_model.price / listing_model.beds if listing_model.beds > 0 else 0.0
+
                                 evaluated_rows.append({
                                     "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                                     "Address": listing_model.address,
                                     "Property Type": listing_model.property_type,
                                     "Year Built": listing_model.year_built,
+                                    "House Age": house_age,
+                                    "Lot Area": listing_model.lot_area,
+                                    "Price per Lot Area": f"${price_per_lot:,.2f}" if price_per_lot > 0 else "N/A",
+                                    "Price per Sq Size": f"${price_per_total_sqft:,.2f}" if price_per_total_sqft > 0 else "N/A",
+                                    "Price per Bedroom": f"${price_per_bed:,.2f}" if price_per_bed > 0 else "N/A",
                                     "Price": f"${listing_model.price:,.2f}",
                                     "Bedrooms": listing_model.beds,
                                     "Bathrooms": listing_model.baths,
