@@ -818,16 +818,31 @@ with tab_gmail:
     except:
         pass
 
+    # Streamlit Cloud does not preserve gmail_config.json reliably. Use Secrets
+    # as the cloud default, while allowing values entered in this session to win.
+    gmail_user_default = (
+        st.session_state.get("GMAIL_USER")
+        or st.secrets.get("GMAIL_USER", "")
+        or gmail_saved.get("gmail_user", "")
+    )
+    gmail_password_default = (
+        st.session_state.get("GMAIL_PASSWORD")
+        or st.secrets.get("GMAIL_PASSWORD", "")
+        or gmail_saved.get("gmail_password", "")
+    )
+    sheet_url_default = (
+        st.session_state.get("google_spreadsheet_id")
+        or st.secrets.get("google_spreadsheet_id", "")
+        or default_secret_sheet
+        or gmail_saved.get("sheet_url", "")
+    )
+
     col_g1, col_g2 = st.columns(2)
     with col_g1:
-        gmail_user = st.text_input("Email Address", value=st.session_state.get("GMAIL_USER", gmail_saved.get("gmail_user", "")), placeholder="username@gmail.com or username@outlook.com")
-        gmail_password = st.text_input("Email App Password", type="password", value=st.session_state.get("GMAIL_PASSWORD", gmail_saved.get("gmail_password", "")), help="Create an App Password in your Google Account or Microsoft Account Security settings.")
+        gmail_user = st.text_input("Email Address", value=gmail_user_default, placeholder="username@gmail.com or username@outlook.com")
+        gmail_password = st.text_input("Email App Password", type="password", value=gmail_password_default, help="Create an App Password in your Google Account or Microsoft Account Security settings.")
     with col_g2:
-        sheet_url = st.text_input(
-            "Google Spreadsheet URL or ID", 
-            value=st.session_state.get("google_spreadsheet_id", gmail_saved.get("sheet_url", default_secret_sheet)), 
-            placeholder="Paste sheet link here"
-        )
+        sheet_url = st.text_input("Google Spreadsheet URL or ID", value=sheet_url_default, placeholder="Paste sheet link here")
         scan_limit = st.slider("Scan Limit (Recent Emails)", min_value=5, max_value=50, value=15)
 
     if gmail_user:
