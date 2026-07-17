@@ -3,6 +3,7 @@ import pandas as pd
 import time
 import os
 import re
+import json
 from datetime import datetime
 from typing import List, Dict, Tuple, Optional
 
@@ -32,6 +33,7 @@ from utils.real_estate.recommender import generate_recommendation
 from utils.real_estate.maps import build_property_map
 from utils.real_estate.excel_export import export_evaluations_to_excel
 from utils.real_estate.pdf_report import generate_property_pdf
+from utils.property_text_parser import parse_property_description
 
 # Streamlit-Folium integration
 from streamlit_folium import st_folium
@@ -141,10 +143,6 @@ with col_left:
                     from utils.gemini_helper import query_gemini, get_gemini_client
                     from datetime import datetime
                     
-                    if get_gemini_client() is None:
-                        st.error("🔑 Gemini API Key is missing! Please configure GEMINI_API_KEY in your Streamlit Secrets or environment variables.")
-                        st.stop()
-                        
                     prompt = f"""
                     You are a real estate research assistant. Parse the property listing details from the user-pasted text below.
                     Text:
@@ -190,7 +188,10 @@ with col_left:
                     Do not include markdown code blocks or any other explanation. Only return valid JSON.
                     """
                     
-                    gemini_response = query_gemini(prompt, response_json=True)
+                    fallback_data = parse_property_description(prop_description)
+                    gemini_response = query_gemini(prompt, response_json=True) if get_gemini_client() else None
+                    if not gemini_response and fallback_data.get("address") and fallback_data.get("price"):
+                        gemini_response = json.dumps(fallback_data)
                     if gemini_response:
                         cleaned_response = gemini_response.strip()
                         if cleaned_response.startswith("```json"):
@@ -198,7 +199,14 @@ with col_left:
                         if cleaned_response.endswith("```"):
                             cleaned_response = cleaned_response[:-3]
                             
-                        data = json.loads(cleaned_response.strip())
+                        try:
+                            data = json.loads(cleaned_response.strip())
+                        except (json.JSONDecodeError, TypeError):
+                            data = fallback_data
+
+                        for key in ("address", "price", "beds", "baths", "sqft", "property_tax", "year_built", "property_type", "mls_number", "lot_area"):
+                            if fallback_data.get(key) not in (None, "", 0):
+                                data[key] = fallback_data[key]
                         
                         item = {
                             "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
