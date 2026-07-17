@@ -818,16 +818,30 @@ with tab_gmail:
     except:
         pass
 
+    def get_email_secret(*keys):
+        """Read email settings from flat secrets or a nested [gmail] table."""
+        for key in keys:
+            value = st.secrets.get(key, "")
+            if value:
+                return str(value)
+        gmail_section = st.secrets.get("gmail", {})
+        if hasattr(gmail_section, "get"):
+            for key in keys:
+                value = gmail_section.get(key, "") or gmail_section.get(key.lower(), "")
+                if value:
+                    return str(value)
+        return ""
+
     # Streamlit Cloud does not preserve gmail_config.json reliably. Use Secrets
     # as the cloud default, while allowing values entered in this session to win.
     gmail_user_default = (
         st.session_state.get("GMAIL_USER")
-        or st.secrets.get("GMAIL_USER", "")
+        or get_email_secret("GMAIL_USER", "gmail_user", "EMAIL_USER", "email_address")
         or gmail_saved.get("gmail_user", "")
     )
     gmail_password_default = (
         st.session_state.get("GMAIL_PASSWORD")
-        or st.secrets.get("GMAIL_PASSWORD", "")
+        or get_email_secret("GMAIL_PASSWORD", "gmail_password", "EMAIL_PASSWORD", "email_app_password")
         or gmail_saved.get("gmail_password", "")
     )
     sheet_url_default = (
