@@ -792,15 +792,16 @@ with tab_gmail:
 
     gmail_saved = load_gmail_config()
     
-    # Smart discovery for default sheet URL/ID in Secrets
+    # Smart discovery for default configuration values in Secrets
     default_secret_sheet = ""
+    default_secret_email = ""
+    default_secret_email_pass = ""
+    
     try:
-        # Check exact key matches
+        # 1. Search Google Sheet ID/URL
         default_secret_sheet = st.secrets.get("google_spreadsheet_id", "")
         if not default_secret_sheet:
             default_secret_sheet = st.secrets.get("google_sheets", {}).get("spreadsheet_id", "")
-        
-        # Search all secrets keys for 'sheet' or 'spreadsheet'
         if not default_secret_sheet:
             for key in st.secrets.keys():
                 if "sheet" in key.lower() or "spreadsheet" in key.lower():
@@ -815,6 +816,32 @@ with tab_gmail:
                                 break
                         if default_secret_sheet:
                             break
+                            
+        # 2. Search Email Address
+        default_secret_email = st.secrets.get("gmail_user", "")
+        if not default_secret_email:
+            default_secret_email = st.secrets.get("email_user", "")
+        if not default_secret_email:
+            for key in st.secrets.keys():
+                kl = key.lower()
+                if ("email" in kl or "gmail" in kl or "outlook" in kl) and "pass" not in kl:
+                    val = st.secrets[key]
+                    if isinstance(val, str) and "@" in val:
+                        default_secret_email = val
+                        break
+                        
+        # 3. Search Email App Password
+        default_secret_email_pass = st.secrets.get("gmail_password", "")
+        if not default_secret_email_pass:
+            default_secret_email_pass = st.secrets.get("email_password", "")
+        if not default_secret_email_pass:
+            for key in st.secrets.keys():
+                kl = key.lower()
+                if ("gmail" in kl or "email" in kl or "outlook" in kl) and ("pass" in kl or "key" in kl):
+                    val = st.secrets[key]
+                    if isinstance(val, str) and val != "" and kl != "app_password":
+                        default_secret_email_pass = val
+                        break
     except:
         pass
 
@@ -837,11 +864,13 @@ with tab_gmail:
     gmail_user_default = (
         st.session_state.get("GMAIL_USER")
         or get_email_secret("GMAIL_USER", "gmail_user", "EMAIL_USER", "email_address")
+        or default_secret_email
         or gmail_saved.get("gmail_user", "")
     )
     gmail_password_default = (
         st.session_state.get("GMAIL_PASSWORD")
         or get_email_secret("GMAIL_PASSWORD", "gmail_password", "EMAIL_PASSWORD", "email_app_password")
+        or default_secret_email_pass
         or gmail_saved.get("gmail_password", "")
     )
     sheet_url_default = (
