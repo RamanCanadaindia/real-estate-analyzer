@@ -791,13 +791,43 @@ with tab_gmail:
             st.error(f"Failed to save credentials: {e}")
 
     gmail_saved = load_gmail_config()
+    
+    # Smart discovery for default sheet URL/ID in Secrets
+    default_secret_sheet = ""
+    try:
+        # Check exact key matches
+        default_secret_sheet = st.secrets.get("google_spreadsheet_id", "")
+        if not default_secret_sheet:
+            default_secret_sheet = st.secrets.get("google_sheets", {}).get("spreadsheet_id", "")
+        
+        # Search all secrets keys for 'sheet' or 'spreadsheet'
+        if not default_secret_sheet:
+            for key in st.secrets.keys():
+                if "sheet" in key.lower() or "spreadsheet" in key.lower():
+                    val = st.secrets[key]
+                    if isinstance(val, str) and (len(val) > 15 or "docs.google.com" in val):
+                        default_secret_sheet = val
+                        break
+                    elif isinstance(val, dict):
+                        for subkey in ["id", "url", "spreadsheet_id"]:
+                            if subkey in val:
+                                default_secret_sheet = val[subkey]
+                                break
+                        if default_secret_sheet:
+                            break
+    except:
+        pass
 
     col_g1, col_g2 = st.columns(2)
     with col_g1:
         gmail_user = st.text_input("Email Address", value=st.session_state.get("GMAIL_USER", gmail_saved.get("gmail_user", "")), placeholder="username@gmail.com or username@outlook.com")
         gmail_password = st.text_input("Email App Password", type="password", value=st.session_state.get("GMAIL_PASSWORD", gmail_saved.get("gmail_password", "")), help="Create an App Password in your Google Account or Microsoft Account Security settings.")
     with col_g2:
-        sheet_url = st.text_input("Google Spreadsheet URL or ID", value=st.session_state.get("google_spreadsheet_id", gmail_saved.get("sheet_url", st.secrets.get("google_spreadsheet_id", ""))), placeholder="Paste sheet link here")
+        sheet_url = st.text_input(
+            "Google Spreadsheet URL or ID", 
+            value=st.session_state.get("google_spreadsheet_id", gmail_saved.get("sheet_url", default_secret_sheet)), 
+            placeholder="Paste sheet link here"
+        )
         scan_limit = st.slider("Scan Limit (Recent Emails)", min_value=5, max_value=50, value=15)
 
     if gmail_user:
