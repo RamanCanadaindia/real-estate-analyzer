@@ -124,6 +124,7 @@ class RealEstateScraperTask(BaseTask):
             - property_type: The property type (e.g. "Townhouse", "Condo", "Detached House")
             - mls_number: The MLS number if listed (e.g. R2891321)
             - lot_area: Total lot area size in square feet as a number (integer or float, e.g. 4032. Set 0 if no lot area is listed or if it is a standard condo with no individual lot size)
+            - assessed_value: The government assessed value for tax purposes as a number (integer or float, e.g. 980000. Set 0 if not found)
 
             Also, estimate the following research parameters based on your geography knowledge of Metro Vancouver (if the address is in British Columbia):
             - skytrain_walk_minutes: Estimated walking time to the nearest Skytrain station in minutes (integer, e.g. 8. If detached house far from station, estimate walking time to transit hub).
@@ -144,6 +145,7 @@ class RealEstateScraperTask(BaseTask):
                 "property_type": "Townhouse",
                 "mls_number": "...",
                 "lot_area": 4032.0,
+                "assessed_value": 980000.0,
                 "skytrain_walk_minutes": 8,
                 "skytrain_station": "...",
                 "est_rent": 2500,
@@ -175,6 +177,7 @@ class RealEstateScraperTask(BaseTask):
                         "Property Type": data.get("property_type", "Condo"),
                         "MLS Number": data.get("mls_number", "N/A"),
                         "Lot Area": float(data.get("lot_area", 0.0)),
+                        "Assessed Value": float(data.get("assessed_value", 0.0)),
                         "Transit Walk Min": data.get("skytrain_walk_minutes", 15),
                         "Nearest Station": data.get("skytrain_station", "Unknown Transit"),
                         "Est Rent": data.get("est_rent", 2000),
@@ -253,6 +256,15 @@ class RealEstateScraperTask(BaseTask):
             except:
                 pass
         
+        # Assessed Value Heuristics
+        assessed_match = re.search(r'(?:Assessed\s*Value|Assessed|Assessment)[\s:|]*(\$?[\d,]+\.?\d*)', text, re.IGNORECASE)
+        assessed_val = 0.0
+        if assessed_match:
+            try:
+                assessed_val = float(re.sub(r'[^\d.]', '', assessed_match.group(1)))
+            except:
+                pass
+
         # Property Type Heuristics
         text_lower = text.lower()
         if "apartment/condo" in text_lower or "apartment" in text_lower or "condo" in text_lower:
@@ -281,6 +293,7 @@ class RealEstateScraperTask(BaseTask):
             "Property Type": prop_type,
             "MLS Number": mls_num,
             "Lot Area": lot_area,
+            "Assessed Value": assessed_val,
             "Transit Walk Min": 10,
             "Nearest Station": "Nearest Station Hub",
             "Est Rent": 2200,

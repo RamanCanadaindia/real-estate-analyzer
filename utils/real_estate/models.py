@@ -13,6 +13,7 @@ class PropertyListing:
     year_built: int
     property_type: str  # Condo, Townhouse, Detached House
     lot_area: float = 0.0
+    assessed_value: float = 0.0
     mls_number: str = "N/A"
     link: str = ""
     timestamp: str = ""

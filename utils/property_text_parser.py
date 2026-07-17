@@ -54,13 +54,16 @@ def parse_property_description(raw_text: str) -> dict[str, Any]:
         r"annual\s+tax\s+amount\s*:\s*(?:C\s*)?\$\s*([\d,]+(?:\.\d+)?)",
         r"property\s+tax\s*[:\-]?\s*(?:C\s*)?\$\s*([\d,]+(?:\.\d+)?)",
     ], text)
+    assessed = _match([
+        r"(?:assessed\s+value|assessed|assessment)\s*[:\-]?\s*(?:C\s*)?\$\s*([\d,]+(?:\.\d+)?)",
+    ], text)
     year = _match([r"\b(?:year\s+)?built(?:\s+in)?\s*[:\-]?\s*((?:18|19|20)\d{2})"], text)
     mls = _match([r"\bMLS(?:®)?\s*(?:#|number|no\.?|:)\s*[:#]?\s*([A-Z0-9-]+)"], text)
     property_type = _match([
         r"property\s+subtype\s*:\s*([^\n]+)",
         r"^\s*((?:single\s*family|townhouse|condo(?:minium)?|apartment|duplex|triplex)[^\n]*)$",
     ], text)
-
+ 
     return {
         "address": address,
         "price": price,
@@ -69,6 +72,7 @@ def parse_property_description(raw_text: str) -> dict[str, Any]:
         "sqft": int(_number(sqft, 800)),
         "strata_fee": 0.0,
         "property_tax": _number(tax),
+        "assessed_value": _number(assessed),
         "year_built": int(_number(year, 2000)),
         "property_type": property_type or "Unknown",
         "mls_number": mls or "N/A",

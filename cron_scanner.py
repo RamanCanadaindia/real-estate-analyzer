@@ -196,6 +196,7 @@ def run_scanner():
                 year_built=int(p_data.get("Year Built", 2000)),
                 property_type=p_data.get("Property Type", "Condo"),
                 lot_area=float(p_data.get("Lot Area", 0.0)),
+                assessed_value=float(p_data.get("Assessed Value", 0.0)),
                 mls_number=p_data.get("MLS Number", "N/A"),
                 link=p_data.get("Link", ""),
                 timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -275,6 +276,7 @@ def run_scanner():
                 "Price per Lot Area": f"${price_per_lot:,.2f}" if price_per_lot > 0 else "N/A",
                 "Price per Sq Size": f"${price_per_total_sqft:,.2f}" if price_per_total_sqft > 0 else "N/A",
                 "Price per Bedroom": f"${price_per_bed:,.2f}" if price_per_bed > 0 else "N/A",
+                "Assessed Value": f"${listing_model.assessed_value:,.2f}" if listing_model.assessed_value > 0 else "N/A",
                 "Price": f"${listing_model.price:,.2f}",
                 "Bedrooms": listing_model.beds,
                 "Bathrooms": listing_model.baths,

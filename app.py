@@ -157,9 +157,9 @@ with col_left:
                     - strata_fee: Monthly maintenance/strata fee as a number (e.g. 350.00. Set 0 if no strata/maintenance fee is present)
                     - property_tax: Annual property tax as a number (e.g. 2100.00. Set 0 if not listed)
                     - year_built: Year the property was built (integer, e.g. 2018. Default to 2000 if not found)
-                    - property_type: The property type (e.g. "Townhouse", "Condo", "Detached House")
-                    - mls_number: The MLS number if listed (e.g. R2891321. Default to "N/A" if not found)
+                    - property_type: The property type (e.g. "Townhouse                    - mls_number: The MLS number if listed (e.g. R2891321. Default to "N/A" if not found)
                     - lot_area: Total lot area size in square feet as a number (integer or float, e.g. 4032. Set 0 if no lot area is listed or if it is a standard condo with no individual lot size)
+                    - assessed_value: The government assessed value for tax purposes as a number (integer or float, e.g. 980000. Set 0 if not found)
                     
                     Also, estimate these parameters based on Metro Vancouver geography (if the address is in British Columbia):
                     - skytrain_walk_minutes: Estimated walking time to the nearest Skytrain station in minutes (integer, e.g. 8. Default to 15 if unknown).
@@ -180,6 +180,7 @@ with col_left:
                         "property_type": "Townhouse",
                         "mls_number": "...",
                         "lot_area": 0.0,
+                        "assessed_value": 0.0,
                         "skytrain_walk_minutes": 15,
                         "skytrain_station": "...",
                         "est_rent": 2200,
@@ -203,8 +204,8 @@ with col_left:
                             data = json.loads(cleaned_response.strip())
                         except (json.JSONDecodeError, TypeError):
                             data = fallback_data
-
-                        for key in ("address", "price", "beds", "baths", "sqft", "property_tax", "year_built", "property_type", "mls_number", "lot_area"):
+ 
+                        for key in ("address", "price", "beds", "baths", "sqft", "property_tax", "year_built", "property_type", "mls_number", "lot_area", "assessed_value"):
                             if fallback_data.get(key) not in (None, "", 0):
                                 data[key] = fallback_data[key]
                         
@@ -221,6 +222,7 @@ with col_left:
                             "Property Type": data.get("property_type", "Condo"),
                             "MLS Number": data.get("mls_number", "N/A"),
                             "Lot Area": float(data.get("lot_area", 0.0)),
+                            "Assessed Value": float(data.get("assessed_value", 0.0)),
                             "Transit Walk Min": data.get("skytrain_walk_minutes", 15),
                             "Nearest Station": data.get("skytrain_station", "Unknown Transit"),
                             "Est Rent": data.get("est_rent", 2200),
@@ -311,6 +313,7 @@ if st.session_state.scraped_properties:
             year_built=int(p.get("Year Built", 2000)),
             property_type=p.get("Property Type", "Condo"),
             lot_area=float(p.get("Lot Area", 0.0)),
+            assessed_value=float(p.get("Assessed Value", 0.0)),
             mls_number=p.get("MLS Number", "N/A"),
             link=p.get("Link", ""),
             timestamp=p.get("Timestamp", "")
@@ -738,6 +741,7 @@ with col_right:
                                     "Price per Lot Area": f"${price_per_lot:,.2f}" if price_per_lot > 0 else "N/A",
                                     "Price per Sq Size": f"${price_per_total_sqft:,.2f}" if price_per_total_sqft > 0 else "N/A",
                                     "Price per Bedroom": f"${price_per_bed:,.2f}" if price_per_bed > 0 else "N/A",
+                                    "Assessed Value": f"${listing.assessed_value:,.2f}" if listing.assessed_value > 0 else "N/A",
                                     "Price": f"${listing.price:,.2f}",
                                     "Bedrooms": listing.beds,
                                     "Bathrooms": listing.baths,
@@ -1143,6 +1147,7 @@ with tab_gmail:
                                     year_built=int(p_data.get("Year Built", 2000)),
                                     property_type=p_data.get("Property Type", "Condo"),
                                     lot_area=float(p_data.get("Lot Area", 0.0)),
+                                    assessed_value=float(p_data.get("Assessed Value", 0.0)),
                                     mls_number=p_data.get("MLS Number", "N/A"),
                                     link=p_data.get("Link", ""),
                                     timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1221,6 +1226,7 @@ with tab_gmail:
                                     "Price per Lot Area": f"${price_per_lot:,.2f}" if price_per_lot > 0 else "N/A",
                                     "Price per Sq Size": f"${price_per_total_sqft:,.2f}" if price_per_total_sqft > 0 else "N/A",
                                     "Price per Bedroom": f"${price_per_bed:,.2f}" if price_per_bed > 0 else "N/A",
+                                    "Assessed Value": f"${listing_model.assessed_value:,.2f}" if listing_model.assessed_value > 0 else "N/A",
                                     "Price": f"${listing_model.price:,.2f}",
                                     "Bedrooms": listing_model.beds,
                                     "Bathrooms": listing_model.baths,
