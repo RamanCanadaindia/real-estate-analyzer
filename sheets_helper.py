@@ -249,9 +249,10 @@ def sync_property_listings(spreadsheet, df):
             existing_addresses = set()
             
             if all_values:
-                headers = [str(h).strip().lower() for h in all_values[0]]
-                link_col_idx = headers.index("link") if "link" in headers else -1
-                addr_col_idx = headers.index("address") if "address" in headers else -1
+                sheet_headers = [str(h).strip() for h in all_values[0]]
+                normalized_headers = [h.lower() for h in sheet_headers]
+                link_col_idx = normalized_headers.index("link") if "link" in normalized_headers else -1
+                addr_col_idx = normalized_headers.index("address") if "address" in normalized_headers else -1
                 
                 for row in all_values[1:]:
                     if link_col_idx != -1 and link_col_idx < len(row):
@@ -262,10 +263,22 @@ def sync_property_listings(spreadsheet, df):
                         addr_val = str(row[addr_col_idx]).strip().lower()
                         if addr_val:
                             existing_addresses.add(addr_val)
+            else:
+                sheet_headers = list(df.columns)
+                wks.update(values=[sheet_headers], range_name="A1")
+
+            # Keep the existing sheet layout, append genuinely new columns, and
+            # always map values by header name. Positional writes corrupt rows
+            # whenever the app gains a new metric.
+            missing_headers = [column for column in df.columns if column not in sheet_headers]
+            if missing_headers:
+                sheet_headers.extend(missing_headers)
+                wks.update(values=[sheet_headers], range_name="A1")
         except gspread.exceptions.WorksheetNotFound:
             # Create sheet if missing
             wks = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols=str(len(df.columns)))
-            wks.append_row(list(df.columns))
+            sheet_headers = list(df.columns)
+            wks.append_row(sheet_headers)
             existing_links = set()
             existing_addresses = set()
             
@@ -276,8 +289,9 @@ def sync_property_listings(spreadsheet, df):
             link = str(row.get("Link", "")).strip()
             if link in existing_links or (addr and addr in existing_addresses):
                 continue
-            # Convert all values to strings and fill NA
-            row_clean = row.fillna("").astype(str).tolist()
+            # Map by the worksheet's header order rather than DataFrame position.
+            clean_row = row.fillna("")
+            row_clean = [str(clean_row.get(header, "")) for header in sheet_headers]
             rows_to_append.append(row_clean)
             
         if rows_to_append:
