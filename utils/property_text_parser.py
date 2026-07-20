@@ -120,6 +120,7 @@ def parse_property_description(raw_text: str) -> dict[str, Any]:
     
     assessed = _match([
         r"(?:assessed\s+value|assessed|assessment)\s*[:\-]?\s*(?:C\s*)?\$\s*([\d,]+(?:\.\d+)?)",
+        r"2026\s+(?:C\s*\$|CAD\s*\$?|\$)?[\d,]+\s+(?:C\s*\$|CAD\s*\$?|\$)?[\d,]+\s+(?:C\s*\$|CAD\s*\$?|\$)?([\d,]+)",
         r"202\d\s+Land\s+\$?[\d,]+\s+Impr\.\s+\$?[\d,]+\s+Total\s+\$?([\d,]+)",
     ], text)
     
@@ -128,7 +129,9 @@ def parse_property_description(raw_text: str) -> dict[str, Any]:
         r"Age\s+\d+\s+years\s+\(((?:18|19|20)\d{2})\)"
     ], text)
     
-    mls = _match([r"\bMLS(?:®)?\s*(?:#|number|no\.?|:)\s*[:#]?\s*([A-Z0-9-]+)"], text)
+    mls = _match([
+        r"\bMLS(?:®)?\s*(?:#|number|no\.?|:)?\s*[:#]?\s*([A-Z0-9-]+)"
+    ], text)
     
     property_type = _match([
         r"property\s+subtype\s*:\s*([^\n]+)",
