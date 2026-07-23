@@ -686,17 +686,8 @@ with col_right:
             except Exception:
                 pass
                 
-            # Fallback to local configuration file
             if not default_sheet_id:
-                try:
-                    import json
-                    gmail_config_path = "gmail_config.json"
-                    if os.path.exists(gmail_config_path):
-                        with open(gmail_config_path, "r", encoding="utf-8") as f:
-                            saved_config = json.load(f)
-                            default_sheet_id = saved_config.get("sheet_url", "")
-                except Exception:
-                    pass
+                default_sheet_id = "https://docs.google.com/spreadsheets/d/1RBemlI6rLuoAju_YDmNn0W4bRycLLItrTLMeKNmJkEA/edit?gid=0#gid=0"
                     
             spreadsheet_input = st.text_input(
                 "Google Sheet Link / URL:",
@@ -830,8 +821,8 @@ with tab_gmail:
                             if subkey in val:
                                 default_secret_sheet = val[subkey]
                                 break
-                        if default_secret_sheet:
-                            break
+        if not default_secret_sheet:
+            default_secret_sheet = "https://docs.google.com/spreadsheets/d/1RBemlI6rLuoAju_YDmNn0W4bRycLLItrTLMeKNmJkEA/edit?gid=0#gid=0"
                             
         # 2. Search Email Address
         default_secret_email = st.secrets.get("gmail_user", "")
