@@ -111,6 +111,11 @@ def parse_property_description(raw_text: str) -> dict[str, Any]:
         r"Land\s+Size\s*.*?\(\s*([\d,]+)\s*(?:sqft|sq\.?\s*ft|sqft)\s*\)",
         r"lot\s+size\s*~?([\d,]+)\s*(?:sqft|sq\.?\s*ft|sqft)",
     ], text)
+    strata = _match([
+        r"maintenance\s+fee\s*(?:C\s*)?\$\s*([\d,]+(?:\.\d+)?)",
+        r"strata\s+fee\s*(?:C\s*)?\$\s*([\d,]+(?:\.\d+)?)",
+        r"maintenance\s*:\s*(?:C\s*)?\$\s*([\d,]+(?:\.\d+)?)",
+    ], text)
     
     tax = _match([
         r"annual\s+tax\s+amount\s*:\s*(?:C\s*)?\$\s*([\d,]+(?:\.\d+)?)",
@@ -145,7 +150,7 @@ def parse_property_description(raw_text: str) -> dict[str, Any]:
         "beds": int(_number(beds, 1)),
         "baths": _number(baths, 1),
         "sqft": int(_number(sqft, 800)),
-        "strata_fee": 0.0,
+        "strata_fee": _number(strata, 0.0),
         "property_tax": _number(tax),
         "assessed_value": _number(assessed),
         "year_built": int(_number(year, 2000)),
