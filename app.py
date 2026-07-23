@@ -53,6 +53,17 @@ st.set_page_config(
 if not auth.check_password():
     st.stop()
 
+# 🔑 Gemini API Key Input in Sidebar
+st.sidebar.markdown("### 🔑 Gemini Configuration")
+gemini_key_input = st.sidebar.text_input(
+    "Enter Google AI Studio API Key:",
+    type="password",
+    value=st.session_state.get("GEMINI_API_KEY", st.secrets.get("GEMINI_API_KEY", "")),
+    help="Input your Gemini API key here to enable parsing with AI."
+)
+if gemini_key_input:
+    st.session_state["GEMINI_API_KEY"] = gemini_key_input
+
 # Initialize session state for properties
 if "scraped_properties" not in st.session_state:
     st.session_state.scraped_properties = []
@@ -206,8 +217,9 @@ with col_left:
                             data = fallback_data
  
                         for key in ("address", "price", "beds", "baths", "sqft", "property_tax", "year_built", "property_type", "mls_number", "lot_area", "assessed_value"):
-                            if fallback_data.get(key) not in (None, "", 0):
-                                data[key] = fallback_data[key]
+                            if data.get(key) in (None, "", 0, "Unknown", "N/A"):
+                                if fallback_data.get(key) not in (None, "", 0):
+                                    data[key] = fallback_data[key]
                         
                         item = {
                             "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

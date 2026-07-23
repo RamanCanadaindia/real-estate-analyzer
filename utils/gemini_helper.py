@@ -8,6 +8,13 @@ def get_gemini_client():
     Returns None if not configured.
     """
     api_key = os.environ.get("GEMINI_API_KEY")
+    try:
+        import streamlit as st
+        if "GEMINI_API_KEY" in st.session_state and st.session_state["GEMINI_API_KEY"]:
+            api_key = st.session_state["GEMINI_API_KEY"]
+    except Exception:
+        pass
+        
     if not api_key:
         try:
             import streamlit as st
