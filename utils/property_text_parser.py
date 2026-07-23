@@ -82,9 +82,9 @@ def parse_property_description(raw_text: str) -> dict[str, Any]:
     ], text)
     
     address = _match([
-        r"^\s*(\d{1,6}(?:[- ]\d{1,6})?\s+[^\n,]+,\s*[^\n,]+,\s*[A-Z]{2}(?:\s+[A-Z]\d[A-Z]\s*\d[A-Z]\d)?)\s*$",
+        r"^\s*((?:#\s*\d{1,5}[-\s]+)?\d{1,6}(?:[- ]\d{1,6})?\s+[^\n,]+,\s*[^\n,]+,\s*[A-Z]{2}(?:\s+[A-Z]\d[A-Z]\s*\d[A-Z]\d)?)\s*$",
         r"(?:address|location)\s*:\s*([^\n]+)",
-        r"^\s*(\d{1,6}\s+[A-Za-z0-9.' -]+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Way|Lane|Ln|Boulevard|Blvd|Crescent|Cres|Court|Ct)(?:,?\s+[^\n]+)?)\s*$",
+        r"^\s*((?:#\s*\d{1,5}[-\s]+)?\d{1,6}\s+[A-Za-z0-9.' -]+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Way|Lane|Ln|Boulevard|Blvd|Crescent|Cres|Court|Ct)(?:,?\s+[^\n]+)?)\s*$",
     ], text)
     
     beds = _match([
